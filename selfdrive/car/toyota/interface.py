@@ -165,6 +165,16 @@ class CarInterface(object):
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.17], [0.03]]
       ret.lateralTuning.pid.kf = 0.00006
 
+    elif candidate == CAR.LEXUS_ES:
+      stop_and_go = False
+      ret.safetyParam = 73 # see conversion factor for STEER_TORQUE_EPS in dbc file
+      ret.wheelbase = 2.82
+      ret.steerRatio = 14.6
+      tire_stiffness_factor = 0.7983
+      ret.mass = 3571 * CV.LB_TO_KG + std_cargo
+      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.17], [0.03]]
+      ret.lateralTuning.pid.kf = 0.00006
+
     elif candidate == CAR.RAV4_2019:
       stop_and_go = True
       ret.safetyParam = 100
