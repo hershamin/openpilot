@@ -25,6 +25,7 @@ class CarInterface(object):
     self.can_invalid_count = 0
     self.cam_can_valid_count = 0
     self.cruise_enabled_prev = False
+    self.cruise_on_prev = False
 
     # *** init the major players ***
     self.CS = CarState(CP)
@@ -375,27 +376,33 @@ class CarInterface(object):
       events.append(create_event('reverseGear', [ET.NO_ENTRY, ET.IMMEDIATE_DISABLE]))
     if self.CS.steer_error:
       events.append(create_event('steerTempUnavailable', [ET.NO_ENTRY, ET.WARNING]))
-    if self.CS.low_speed_lockout and self.CP.enableDsu:
-      events.append(create_event('lowSpeedLockout', [ET.NO_ENTRY, ET.PERMANENT]))
-    if ret.vEgo < self.CP.minEnableSpeed and self.CP.enableDsu:
-      events.append(create_event('speedTooLow', [ET.NO_ENTRY]))
-      if c.actuators.gas > 0.1:
-        # some margin on the actuator to not false trigger cancellation while stopping
-        events.append(create_event('speedTooLow', [ET.IMMEDIATE_DISABLE]))
-      if ret.vEgo < 0.001:
-        # while in standstill, send a user alert
-        events.append(create_event('manualRestart', [ET.WARNING]))
+    # if self.CS.low_speed_lockout and self.CP.enableDsu:
+    #   events.append(create_event('lowSpeedLockout', [ET.NO_ENTRY, ET.PERMANENT]))
+    # if ret.vEgo < self.CP.minEnableSpeed and self.CP.enableDsu:
+    #   events.append(create_event('speedTooLow', [ET.NO_ENTRY]))
+    #   if c.actuators.gas > 0.1:
+    #     # some margin on the actuator to not false trigger cancellation while stopping
+    #     events.append(create_event('speedTooLow', [ET.IMMEDIATE_DISABLE]))
+    #   if ret.vEgo < 0.001:
+    #     # while in standstill, send a user alert
+    #     events.append(create_event('manualRestart', [ET.WARNING]))
 
     # enable request in prius is simple, as we activate when Toyota is active (rising edge)
-    if ret.cruiseState.enabled and not self.cruise_enabled_prev:
-      events.append(create_event('pcmEnable', [ET.ENABLE]))
-    elif not ret.cruiseState.enabled:
-      events.append(create_event('pcmDisable', [ET.USER_DISABLE]))
+    # if ret.cruiseState.enabled and not self.cruise_enabled_prev:
+    #   events.append(create_event('pcmEnable', [ET.ENABLE]))
+    # elif not ret.cruiseState.enabled:
+    #   events.append(create_event('pcmDisable', [ET.USER_DISABLE]))
 
     # disable on pedals rising edge or when brake is pressed and speed isn't zero
-    if (ret.gasPressed and not self.gas_pressed_prev) or \
-       (ret.brakePressed and (not self.brake_pressed_prev or ret.vEgo > 0.001)):
-      events.append(create_event('pedalPressed', [ET.NO_ENTRY, ET.USER_DISABLE]))
+    # if (ret.gasPressed and not self.gas_pressed_prev) or \
+    #    (ret.brakePressed and (not self.brake_pressed_prev or ret.vEgo > 0.001)):
+    #   events.append(create_event('pedalPressed', [ET.NO_ENTRY, ET.USER_DISABLE]))
+
+    # Custom HA Code: Enable when cruise switch on
+    if ret.cruiseState.available and not self.cruise_on_prev:
+      events.append(create_event('pcmEnable', [ET.ENABLE]))
+    elif not ret.cruiseState.available:
+      events.append(create_event('pcmDisable', [ET.USER_DISABLE]))
 
     if ret.gasPressed:
       events.append(create_event('pedalPressed', [ET.PRE_ENABLE]))
@@ -406,6 +413,7 @@ class CarInterface(object):
     self.gas_pressed_prev = ret.gasPressed
     self.brake_pressed_prev = ret.brakePressed
     self.cruise_enabled_prev = ret.cruiseState.enabled
+    self.cruise_on_prev = ret.cruiseState.available
 
     return ret.as_reader()
 
