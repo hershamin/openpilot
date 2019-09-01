@@ -163,6 +163,13 @@ typedef struct UIScene {
 
   // Used to show gps planner status
   bool gps_planner_active;
+
+  // Left & right measurements on UI
+  uint16_t maxCpuTemp;
+  uint32_t maxBatTemp;
+  float freeSpace;
+  float angleSteers;
+  float angleSteersDes;
 } UIScene;
 
 typedef struct {
@@ -1419,6 +1426,276 @@ static void ui_draw_vision_footer(UIState *s) {
 #endif
 }
 
+static int ui_draw_measure(UIState *s,  const char* bb_value, const char* bb_uom, const char* bb_label,
+		int bb_x, int bb_y, int bb_uom_dx,
+		NVGcolor bb_valueColor, NVGcolor bb_labelColor, NVGcolor bb_uomColor,
+		int bb_valueFontSize, int bb_labelFontSize, int bb_uomFontSize )  {
+  const UIScene *scene = &s->scene;
+  nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+  int dx = 0;
+  if (strlen(bb_uom) > 0) {
+  	dx = (int)(bb_uomFontSize*2.5/2);
+   }
+  //print value
+  nvgFontFace(s->vg, "sans-semibold");
+  nvgFontSize(s->vg, bb_valueFontSize*2.5);
+  nvgFillColor(s->vg, bb_valueColor);
+  nvgText(s->vg, bb_x-dx/2, bb_y+ (int)(bb_valueFontSize*2.5)+5, bb_value, NULL);
+  //print label
+  nvgFontFace(s->vg, "sans-regular");
+  nvgFontSize(s->vg, bb_labelFontSize*2.5);
+  nvgFillColor(s->vg, bb_labelColor);
+  nvgText(s->vg, bb_x, bb_y + (int)(bb_valueFontSize*2.5)+5 + (int)(bb_labelFontSize*2.5)+5, bb_label, NULL);
+  //print uom
+  if (strlen(bb_uom) > 0) {
+      nvgSave(s->vg);
+	  int rx =bb_x + bb_uom_dx + bb_valueFontSize -3;
+	  int ry = bb_y + (int)(bb_valueFontSize*2.5/2)+25;
+	  nvgTranslate(s->vg,rx,ry);
+	  nvgRotate(s->vg, -1.5708); //-90deg in radians
+	  nvgFontFace(s->vg, "sans-regular");
+	  nvgFontSize(s->vg, (int)(bb_uomFontSize*2.5));
+	  nvgFillColor(s->vg, bb_uomColor);
+	  nvgText(s->vg, 0, 0, bb_uom, NULL);
+	  nvgRestore(s->vg);
+  }
+  return (int)((bb_valueFontSize + bb_labelFontSize)*2.5) + 5;
+}
+
+static void ui_draw_measures_left(UIState *s, int bb_x, int bb_y, int bb_w ) {
+	const UIScene *scene = &s->scene;
+	int bb_rx = bb_x + (int)(bb_w/2);
+	int bb_ry = bb_y;
+	int bb_h = 5;
+	NVGcolor lab_color = nvgRGBA(255, 255, 255, 200);
+	NVGcolor uom_color = nvgRGBA(255, 255, 255, 200);
+	int value_fontSize=30;
+	int label_fontSize=15;
+	int uom_fontSize = 15;
+	int bb_uom_dx =  (int)(bb_w /2 - uom_fontSize*2.5) ;
+
+	// add CPU temperature
+	if (true) {
+        char val_str[16];
+        char uom_str[6];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        if((int)(scene->maxCpuTemp/10) > 80) {
+            val_color = nvgRGBA(255, 188, 3, 200);
+        }
+        if((int)(scene->maxCpuTemp/10) > 92) {
+            val_color = nvgRGBA(255, 0, 0, 200);
+        }
+        // temp is always in C * 10
+        snprintf(val_str, sizeof(val_str), "%d C", (int)(scene->maxCpuTemp/10));
+        snprintf(uom_str, sizeof(uom_str), "");
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "CPU TEMP",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+	}
+
+    // add battery temperature
+    if (true) {
+        char val_str[16];
+        char uom_str[6];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        if((int)(scene->maxBatTemp/1000) > 40) {
+            val_color = nvgRGBA(255, 188, 3, 200);
+        }
+        if((int)(scene->maxBatTemp/1000) > 50) {
+            val_color = nvgRGBA(255, 0, 0, 200);
+        }
+        // temp is always in C * 1000
+        snprintf(val_str, sizeof(val_str), "%d C", (int)(scene->maxBatTemp/1000));
+        snprintf(uom_str, sizeof(uom_str), "");
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "BAT TEMP",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+    }
+
+	// add whether openpilot is engageable
+	if (true) {
+        char val_str[16];
+        char uom_str[3];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        // show green if ready to engage, else white
+        if (scene->engageable) {
+           val_color = nvgRGBA(0, 255, 0, 200);
+           snprintf(val_str, sizeof(val_str), "Y");
+        } else {
+           val_color = nvgRGBA(255, 255, 255, 200);
+           snprintf(val_str, sizeof(val_str), "N");
+        }
+        snprintf(uom_str, sizeof(uom_str), "");
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "READY",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+	}
+
+    // add free space
+    if (true) {
+        char val_str[16];
+        char uom_str[3];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        // show red/orange if free space is low
+        if(scene->freeSpace < 0.4) {
+            val_color = nvgRGBA(255, 188, 3, 200);
+        }
+        if(scene->freeSpace < 0.2) {
+            val_color = nvgRGBA(255, 0, 0, 200);
+        }
+        snprintf(val_str, sizeof(val_str), "%.1f", s->scene.freeSpace* 100);
+        snprintf(uom_str, sizeof(uom_str), "%%");
+        bb_h += ui_draw_measure(s, val_str, uom_str, "FREE",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+    }
+
+	// finally draw the frame
+	bb_h += 20;
+	nvgBeginPath(s->vg);
+  	nvgRoundedRect(s->vg, bb_x, bb_y, bb_w, bb_h, 20);
+  	nvgStrokeColor(s->vg, nvgRGBA(255,255,255,80));
+  	nvgStrokeWidth(s->vg, 6);
+  	nvgStroke(s->vg);
+}
+
+static void ui_draw_measures_right(UIState *s, int bb_x, int bb_y, int bb_w ) {
+	const UIScene *scene = &s->scene;
+	int bb_rx = bb_x + (int)(bb_w/2);
+	int bb_ry = bb_y;
+	int bb_h = 5;
+	NVGcolor lab_color = nvgRGBA(255, 255, 255, 200);
+	NVGcolor uom_color = nvgRGBA(255, 255, 255, 200);
+	int value_fontSize=30;
+	int label_fontSize=15;
+	int uom_fontSize = 15;
+	int bb_uom_dx =  (int)(bb_w /2 - uom_fontSize*2.5) ;
+
+	// add visual radar relative distance
+	if (true) {
+        char val_str[16];
+        char uom_str[6];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        if (scene->lead_status) {
+            // show RED if less than 5 meters
+            // show orange if less than 15 meters
+            if((int)(scene->lead_d_rel) < 15) {
+                val_color = nvgRGBA(255, 188, 3, 200);
+            }
+            if((int)(scene->lead_d_rel) < 5) {
+                val_color = nvgRGBA(255, 0, 0, 200);
+            }
+            // lead car relative distance is always in meters
+            snprintf(val_str, sizeof(val_str), "%d", (int)scene->lead_d_rel);
+        } else {
+            snprintf(val_str, sizeof(val_str), "-");
+        }
+        snprintf(uom_str, sizeof(uom_str), "m   ");
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "REL DIST",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+	}
+
+	// add visual radar relative speed
+	if (true) {
+        char val_str[16];
+        char uom_str[6];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        if (scene->lead_status) {
+            // show Orange if negative speed (approaching)
+            // show Orange if negative speed faster than 5mph (approaching fast)
+            if((int)(scene->lead_v_rel) < 0) {
+                val_color = nvgRGBA(255, 188, 3, 200);
+            }
+            if((int)(scene->lead_v_rel) < -5) {
+                val_color = nvgRGBA(255, 0, 0, 200);
+            }
+            // lead car relative speed is always in meters
+            if (s->is_metric) {
+                snprintf(val_str, sizeof(val_str), "%d", (int)(scene->lead_v_rel * 3.6 + 0.5));
+            } else {
+                snprintf(val_str, sizeof(val_str), "%d", (int)(scene->lead_v_rel * 2.2374144 + 0.5));
+            }
+        } else {
+            snprintf(val_str, sizeof(val_str), "-");
+        }
+        if (s->is_metric) {
+            snprintf(uom_str, sizeof(uom_str), "km/h");;
+        } else {
+            snprintf(uom_str, sizeof(uom_str), "mph");
+        }
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "REL SPD",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+	}
+
+	// add  steering angle
+	if (true) {
+        char val_str[16];
+        char uom_str[6];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        // show Orange if more than 6 degrees
+        // show red if  more than 12 degrees
+        if(((int)(scene->angleSteers) < -6) || ((int)(scene->angleSteers) > 6)) {
+            val_color = nvgRGBA(255, 188, 3, 200);
+        }
+        if(((int)(scene->angleSteers) < -12) || ((int)(scene->angleSteers) > 12)) {
+            val_color = nvgRGBA(255, 0, 0, 200);
+        }
+        // steering is in degrees
+        snprintf(val_str, sizeof(val_str), "%.1f",(scene->angleSteers));
+        snprintf(uom_str, sizeof(uom_str), "deg");
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "STEER",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+	}
+
+	// add desired steering angle
+	if (true) {
+        char val_str[16];
+        char uom_str[6];
+        NVGcolor val_color = nvgRGBA(255, 255, 255, 200);
+        // show Orange if more than 6 degrees
+        // show red if  more than 12 degrees
+        if(((int)(scene->angleSteersDes) < -6) || ((int)(scene->angleSteersDes) > 6)) {
+            val_color = nvgRGBA(255, 188, 3, 200);
+        }
+        if(((int)(scene->angleSteersDes) < -12) || ((int)(scene->angleSteersDes) > 12)) {
+            val_color = nvgRGBA(255, 0, 0, 200);
+        }
+        // steering is in degrees
+        snprintf(val_str, sizeof(val_str), "%.1f",(scene->angleSteersDes));
+        snprintf(uom_str, sizeof(uom_str), "deg");
+        bb_h += ui_draw_measure(s,  val_str, uom_str, "DES STEER",
+            bb_rx, bb_ry, bb_uom_dx,
+            val_color, lab_color, uom_color,
+            value_fontSize, label_fontSize, uom_fontSize );
+        bb_ry = bb_y + bb_h;
+	}
+
+	// finally draw the frame
+	bb_h += 20;
+	nvgBeginPath(s->vg);
+  	nvgRoundedRect(s->vg, bb_x, bb_y, bb_w, bb_h, 20);
+  	nvgStrokeColor(s->vg, nvgRGBA(255,255,255,80));
+  	nvgStrokeWidth(s->vg, 6);
+  	nvgStroke(s->vg);
+}
+
 static void ui_draw_vision_alert(UIState *s, int va_size, int va_color,
                                   const char* va_text1, const char* va_text2) {
   const UIScene *scene = &s->scene;
@@ -1510,6 +1787,17 @@ static void ui_draw_vision(UIState *s) {
 
   // Set Speed, Current Speed, Status/Events
   ui_draw_vision_header(s);
+
+  // Draw ui measure on left and right side
+  // const UIScene *scene = &s->scene;
+  const int bb_dml_w = 180;
+  const int bb_dml_x =  (scene->ui_viz_rx + (bdr_s*2));
+  const int bb_dml_y = (box_y + (bdr_s*1.5))+220;
+  const int bb_dmr_w = 180;
+  const int bb_dmr_x = scene->ui_viz_rx + scene->ui_viz_rw - bb_dmr_w - (bdr_s*2) ;
+  const int bb_dmr_y = (box_y + (bdr_s*1.5))+220;
+  ui_draw_measures_left(s,bb_dml_x, bb_dml_y, bb_dml_w );
+  ui_draw_measures_right(s,bb_dmr_x, bb_dmr_y, bb_dmr_w );
 
   if (s->scene.alert_size != ALERTSIZE_NONE) {
     // Controls Alerts
@@ -1629,6 +1917,10 @@ void handle_message(UIState *s, void *which) {
     s->scene.engageable = datad.engageable;
     s->scene.gps_planner_active = datad.gpsPlannerActive;
     s->scene.monitoring_active = datad.driverMonitoringOn;
+
+    // info for left & right ui display
+    s->scene.angleSteers = datad.angleSteers;
+    s->scene.angleSteersDes = datad.angleSteersDes; 
 
     s->scene.frontview = datad.rearViewCam;
 
@@ -1779,6 +2071,18 @@ void handle_message(UIState *s, void *which) {
       // car is started but controls doesn't have fingerprint yet
       update_status(s, STATUS_DISENGAGED);
     }
+
+    // info for left & right ui display
+    s->scene.maxCpuTemp=datad.cpu0;
+    if (s->scene.maxCpuTemp<datad.cpu1) {
+        s->scene.maxCpuTemp=datad.cpu1;
+    } else if (s->scene.maxCpuTemp<datad.cpu2) {
+        s->scene.maxCpuTemp=datad.cpu2;
+    } else if (s->scene.maxCpuTemp<datad.cpu3) {
+        s->scene.maxCpuTemp=datad.cpu3;
+    }
+    s->scene.maxBatTemp=datad.bat;
+	s->scene.freeSpace=datad.freeSpace;
 
     s->scene.started_ts = datad.startedTs;
   } else if (eventd.which == cereal_Event_uiLayoutState) {
